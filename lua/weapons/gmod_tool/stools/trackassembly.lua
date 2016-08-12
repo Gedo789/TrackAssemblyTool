@@ -16,6 +16,7 @@ local vguiCreate            = vgui and vgui.Create
 local utilTraceLine         = util and util.TraceLine
 local utilIsValidModel      = util and util.IsValidModel
 local utilGetPlayerTrace    = util and util.GetPlayerTrace
+local mathAbs               = math and math.abs
 local mathSqrt              = math and math.sqrt
 local mathClamp             = math and math.Clamp
 local fileExists            = file and file.Exists
@@ -313,10 +314,10 @@ function TOOL:GetStatus(stTrace,anyMessage,hdEnt)
   local iMaxlog = asmlib.GetOpVar("LOG_MAXLOGS")
   if(not (iMaxlog > 0)) then return "Status N/A" end
   local ply, sDelim  = self:GetOwner(), "\n"
+  local plyKeys = asmlib.ReadKeyPly(ply)
   local iCurLog = asmlib.GetOpVar("LOG_CURLOGS")
   local sFleLog = asmlib.GetOpVar("LOG_LOGFILE")
   local sSpace  = stringRep(" ",6 + stringLen(tostring(iMaxlog)))
-  local plyKeys = asmlib.LoadKeyPly(ply,"DEBUG")
   local aninfo , anEnt   = self:GetAnchor()
   local pointid, pnextid = self:GetPointID()
   local nextx  , nexty  , nextz   = self:GetPosOffsets()
@@ -337,11 +338,11 @@ function TOOL:GetStatus(stTrace,anyMessage,hdEnt)
         sDu = sDu..sSpace.."  MaxTrack:       <"..tostring(GetConVar("sbox_max"..gsLimitName):GetInt())..">"..sDelim
         sDu = sDu..sSpace.."Dumping player keys:"..sDelim
         sDu = sDu..sSpace.."  Player:         "..stringGsub(tostring(ply),"Player%s","")..sDelim
-        sDu = sDu..sSpace.."  IN.USE:         <"..tostring(plyKeys["USE"])..">"..sDelim
-        sDu = sDu..sSpace.."  IN.DUCK:        <"..tostring(plyKeys["DUCK"])..">"..sDelim
-        sDu = sDu..sSpace.."  IN.SPEED:       <"..tostring(plyKeys["SPEED"])..">"..sDelim
-        sDu = sDu..sSpace.."  IN.RELOAD:      <"..tostring(plyKeys["RELOAD"])..">"..sDelim
-        sDu = sDu..sSpace.."  IN.SCORE:       <"..tostring(plyKeys["SCORE"])..">"..sDelim
+        sDu = sDu..sSpace.."  IN.USE:         <"..tostring(asmlib.CheckButtonPly(ply,IN_USE))..">"..sDelim
+        sDu = sDu..sSpace.."  IN.DUCK:        <"..tostring(asmlib.CheckButtonPly(ply,IN_DUCK))..">"..sDelim
+        sDu = sDu..sSpace.."  IN.SPEED:       <"..tostring(asmlib.CheckButtonPly(ply,IN_SPEED))..">"..sDelim
+        sDu = sDu..sSpace.."  IN.RELOAD:      <"..tostring(asmlib.CheckButtonPly(ply,IN_RELOAD))..">"..sDelim
+        sDu = sDu..sSpace.."  IN.SCORE:       <"..tostring(asmlib.CheckButtonPly(ply,IN_SCORE))..">"..sDelim
         sDu = sDu..sSpace.."Dumping trace data state:"..sDelim
         sDu = sDu..sSpace.."  Trace:          <"..tostring(stTrace)..">"..sDelim
         sDu = sDu..sSpace.."  TR.Hit:         <"..tostring(stTrace and stTrace.Hit or gsNoAV)..">"..sDelim
@@ -429,7 +430,7 @@ function TOOL:LeftClick(stTrace)
   local pointid, pnextid = self:GetPointID()
   local nextx  , nexty  , nextz   = self:GetPosOffsets()
   local nextpic, nextyaw, nextrol = self:GetAngOffsets()
-  asmlib.LoadKeyPly(ply)
+  asmlib.ReadKeyPly(ply)
   if(stTrace.HitWorld) then -- Switch the tool mode ( Spawn )
     local vPos = Vector()
     local aAng = asmlib.GetNormalAngle(ply,stTrace,surfsnap,ydegsnp)
@@ -480,7 +481,7 @@ function TOOL:LeftClick(stTrace)
 
   if(not trRec) then return asmlib.StatusLog(false,self:GetStatus(stTrace,"TOOL:LeftClick(Prop): Trace model not a piece")) end
 
-  if(asmlib.LoadKeyPly(ply,"DUCK")) then
+  if(asmlib.CheckButtonPly(ply,IN_DUCK)) then
     -- IN_DUCK: Use the VALID stTrace.Entity as a piece
     asmlib.PrintNotifyPly(ply,"Model: "..fntrmod.." selected !","UNDO")
     asmlib.ConCommandPly(ply,"model",trModel)
@@ -494,7 +495,7 @@ function TOOL:LeftClick(stTrace)
   local stSpawn = asmlib.GetEntitySpawn(trEnt,stTrace.HitPos,model,pointid,
                            actrad,spnflat,igntype,nextx,nexty,nextz,nextpic,nextyaw,nextrol)
   if(not stSpawn) then -- Not aiming into an active point update settings/properties
-    if(asmlib.LoadKeyPly(ply,"USE")) then -- Physical
+    if(asmlib.CheckButtonPly(ply,IN_USE)) then -- Physical
       if(not asmlib.ApplyPhysicalSettings(trEnt,ignphysgn,freeze,gravity,physmater)) then
         return asmlib.StatusLog(false,self:GetStatus(stTrace,"TOOL:LeftClick(Physical): Failed to apply physical settings",ePiece)) end
       if(not asmlib.ApplyPhysicalAnchor(trEnt,anEnt,weld,nocollide,forcelim)) then
@@ -510,7 +511,7 @@ function TOOL:LeftClick(stTrace)
     end
   end
 
-  if(asmlib.LoadKeyPly(ply,"SPEED") and (tonumber(hdRec.Kept) or 0) > 1) then -- IN_SPEED: Switch the tool mode ( Stacking )
+  if(asmlib.CheckButtonPly(ply,IN_SPEED) and (tonumber(hdRec.Kept) or 0) > 1) then -- IN_SPEED: Switch the tool mode ( Stacking )
     if(count <= 0) then return asmlib.StatusLog(false,self:GetStatus(stTrace,"Stack count not properly picked")) end
     if(pointid == pnextid) then return asmlib.StatusLog(false,self:GetStatus(stTrace,"Point ID overlap")) end
     local ePieceO, ePieceN = trEnt
@@ -584,20 +585,26 @@ function TOOL:RightClick(stTrace)
     return asmlib.StatusLog(false,"TOOL:RightClick(): Model <"..model.."> not a piece") end
   local pointid, pnextid = self:GetPointID()
   local pointbu = pointid
-  asmlib.LoadKeyPly(ply)
-  if(stTrace.HitWorld and asmlib.LoadKeyPly(ply,"USE")) then
+  asmlib.ReadKeyPly(ply)
+  if(stTrace.HitWorld and asmlib.CheckButtonPly(ply,IN_USE)) then
     asmlib.ConCommandPly(ply,"openframe",asmlib.GetAsmVar("maxfruse" ,"INT"))
     return asmlib.StatusLog(true,"TOOL:RightClick(World): Success open frame")
   end
-  if(asmlib.LoadKeyPly(ply,"DUCK")) then -- Crouch ( Ctrl )
-    if(asmlib.LoadKeyPly(ply,"SPEED")) then -- Run ( Left Shift )
-         pnextid = asmlib.IncDecPnextID(pnextid,pointid,"-",hdRec)
-    else pnextid = asmlib.IncDecPnextID(pnextid,pointid,"+",hdRec) end
-  else -- Not Crouch ( Ctrl )
-    if(asmlib.LoadKeyPly(ply,"SPEED")) then -- Run ( Left Shift )
-         pointid = asmlib.IncDecPointID(pointid,"-",hdRec)
-    else pointid = asmlib.IncDecPointID(pointid,"+",hdRec) end
+
+  while(not asmlib.CheckButtonPly(ply,IN_USE)) do
+    asmlib.ReadKeyPly(ply)
+    mwheel = GetMouseWheelPly(ply)
+    if(asmlib.CheckButtonPly(ply,IN_DUCK)) then -- Crouch ( Ctrl )
+      if(mwheel > 0) then
+           pnextid = asmlib.IncDecPnextID(pnextid,pointid,"+",hdRec)
+      else pnextid = asmlib.IncDecPnextID(pnextid,pointid,"-",hdRec) end
+    else
+      if(mwheel > 0) then -- Run ( Left Shift )
+           pointid = asmlib.IncDecPointID(pointid,"+",hdRec)
+      else pointid = asmlib.IncDecPointID(pointid,"-",hdRec) end
+    end
   end
+  
   if(pointid == pnextid) then pnextid = pointbu end
   asmlib.ConCommandPly(ply,"pnextid",pnextid)
   asmlib.ConCommandPly(ply,"pointid",pointid)
@@ -609,9 +616,9 @@ function TOOL:Reload(stTrace)
   if(not stTrace) then return asmlib.StatusLog(false,"TOOL:Reload(): Invalid trace") end
   local ply = self:GetOwner()
   local trEnt = stTrace.Entity
-  asmlib.LoadKeyPly(ply)
+  asmlib.ReadKeyPly(ply)
   if(stTrace.HitWorld) then
-    if(asmlib.LoadKeyPly(ply,"SPEED")) then self:ClearAnchor() end
+    if(asmlib.CheckButtonPly(ply,IN_SPEED)) then self:ClearAnchor() end
     asmlib.SetLogControl(self:GetLogLines(),self:GetLogFile())
     if(self:GetExportDB() ~= 0) then
       asmlib.LogInstance("TOOL:Reload(World): Exporting DB")
@@ -626,7 +633,7 @@ function TOOL:Reload(stTrace)
   elseif(trEnt and trEnt:IsValid()) then
     if(not asmlib.IsPhysTrace(stTrace)) then return false end
     if(asmlib.IsOther(trEnt)) then return false end
-    if(asmlib.LoadKeyPly(ply,"SPEED")) then
+    if(asmlib.CheckButtonPly(ply,IN_SPEED)) then
       self:SetAnchor(stTrace)
       return asmlib.StatusLog(true,"TOOL:Reload(Prop): Anchor set")
     end

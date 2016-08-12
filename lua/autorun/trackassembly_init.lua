@@ -30,7 +30,7 @@ local asmlib = trackasmlib
 
 ------ CONFIGURE ASMLIB ------
 asmlib.Init("track","assembly")
-asmlib.SetOpVar("TOOL_VERSION","5.283")
+asmlib.SetOpVar("TOOL_VERSION","5.285")
 asmlib.SetIndexes("V",1,2,3)
 asmlib.SetIndexes("A",1,2,3)
 asmlib.SetIndexes("S",4,5,6,7)
@@ -2535,14 +2535,12 @@ else
   asmlib.InsertRecord({"models/gscale/straight/s0016.mdl", "#", "#", 2, "", " -16,0,1.016", "0,-180,0"})
   asmlib.InsertRecord({"models/gscale/straight/s0032.mdl", "#", "#", 1, "", "   0,0,1.016", ""})
   asmlib.InsertRecord({"models/gscale/straight/s0032.mdl", "#", "#", 2, "", " -32,0,1.016", "0,-180,0"})
-  ---vv To be tested when the addon gets updated
   asmlib.InsertRecord({"models/gscale/transition/t0032_q_s_1.mdl", "#", "#", 1, "", "   0,0,1.016", ""})
   asmlib.InsertRecord({"models/gscale/transition/t0032_q_s_1.mdl", "#", "#", 2, "", " -32,0,1.016", "0,-180,0"})
   asmlib.InsertRecord({"models/gscale/transition/t0032_q_s_2.mdl", "#", "#", 1, "", "   0,0,1.016", ""})
   asmlib.InsertRecord({"models/gscale/transition/t0032_q_s_2.mdl", "#", "#", 2, "", " -32,0,1.016", "0,-180,0"})
   asmlib.InsertRecord({"models/gscale/transition/t0032_q_t.mdl", "#", "#", 1, "", "   0,0,1.016", ""})
   asmlib.InsertRecord({"models/gscale/transition/t0032_q_t.mdl", "#", "#", 2, "", " -32,0,1.016", "0,-180,0"})
-  ---^^
   asmlib.InsertRecord({"models/gscale/straight/s0064.mdl", "#", "#", 1, "", "   0,0,1.016", ""})
   asmlib.InsertRecord({"models/gscale/straight/s0064.mdl", "#", "#", 2, "", " -64,0,1.016", "0,-180,0"})
   asmlib.InsertRecord({"models/gscale/straight/s0128.mdl", "#", "#", 1, "", "   0,0,1.016", ""})
