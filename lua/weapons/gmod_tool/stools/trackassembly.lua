@@ -583,31 +583,11 @@ function TOOL:RightClick(stTrace)
   local hdRec = asmlib.CacheQueryPiece(model)
   if(not hdRec) then
     return asmlib.StatusLog(false,"TOOL:RightClick(): Model <"..model.."> not a piece") end
-  local pointid, pnextid = self:GetPointID()
-  local pointbu = pointid
   asmlib.ReadKeyPly(ply)
   if(stTrace.HitWorld and asmlib.CheckButtonPly(ply,IN_USE)) then
     asmlib.ConCommandPly(ply,"openframe",asmlib.GetAsmVar("maxfruse" ,"INT"))
     return asmlib.StatusLog(true,"TOOL:RightClick(World): Success open frame")
   end
-
-  while(not asmlib.CheckButtonPly(ply,IN_USE)) do
-    asmlib.ReadKeyPly(ply)
-    mwheel = GetMouseWheelPly(ply)
-    if(asmlib.CheckButtonPly(ply,IN_DUCK)) then -- Crouch ( Ctrl )
-      if(mwheel > 0) then
-           pnextid = asmlib.IncDecPnextID(pnextid,pointid,"+",hdRec)
-      else pnextid = asmlib.IncDecPnextID(pnextid,pointid,"-",hdRec) end
-    else
-      if(mwheel > 0) then -- Run ( Left Shift )
-           pointid = asmlib.IncDecPointID(pointid,"+",hdRec)
-      else pointid = asmlib.IncDecPointID(pointid,"-",hdRec) end
-    end
-  end
-  
-  if(pointid == pnextid) then pnextid = pointbu end
-  asmlib.ConCommandPly(ply,"pnextid",pnextid)
-  asmlib.ConCommandPly(ply,"pointid",pointid)
   return asmlib.StatusLog(true,"TOOL:RightClick(): Success")
 end
 
@@ -1164,5 +1144,26 @@ function TOOL:Think()
     if(self.GhostEntity and self.GhostEntity:IsValid()) then
       self.GhostEntity:Remove()
     end
+  end
+
+  if(CLIENT and input.IsKeyDown(KEY_E)) then
+    local hdRec = asmlib.CacheQueryPiece(model)
+    local pointid, pnextid = self:GetPointID()
+    local pointbu = pointid
+    local mwheelu = input.WasMousePressed(MOUSE_WHEEL_UP)
+    local mwheeld = input.WasMousePressed(MOUSE_WHEEL_DOWN)
+    local mwheel  = (mwheelu and 1) or (mwheeld and -1) or 0
+    if( input.IsKeyDown(KEY_LSHIFT)) then
+      if    (mwheel > 0) then pnextid = asmlib.IncDecPnextID(pnextid,pointid,"+",hdRec)
+      elseif(mwheel < 0) then pnextid = asmlib.IncDecPnextID(pnextid,pointid,"-",hdRec) end
+    else
+      if     (mwheel > 0) then pointid = asmlib.IncDecPointID(pointid,"+",hdRec)
+      elseif (mwheel < 0) then pointid = asmlib.IncDecPointID(pointid,"-",hdRec) end
+    end
+
+    if(pointid == pnextid) then pnextid = pointbu end
+    
+    RunConsoleCommand(gsToolPrefL.."pnextid",pnextid)
+    RunConsoleCommand(gsToolPrefL.."pointid",pointid)
   end
 end
