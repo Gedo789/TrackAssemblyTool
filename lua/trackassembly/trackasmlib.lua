@@ -41,6 +41,7 @@ local IN_WALK      = IN_WALK
 local IN_ZOOM      = IN_ZOOM
 
 ---------------- Localizing ENT Properties ----------------
+local MASK_SOLID            = MASK_SOLID
 local SOLID_VPHYSICS        = SOLID_VPHYSICS
 local MOVETYPE_VPHYSICS     = MOVETYPE_VPHYSICS
 local COLLISION_GROUP_NONE  = COLLISION_GROUP_NONE
@@ -70,6 +71,7 @@ local setmetatable            = setmetatable
 local collectgarbage          = collectgarbage
 local osClock                 = os and os.clock
 local osDate                  = os and os.date
+local bitBand                 = bit and bit.band
 local sqlQuery                = sql and sql.Query
 local sqlLastError            = sql and sql.LastError
 local sqlTableExists          = sql and sql.TableExists
@@ -209,6 +211,7 @@ function IsOther(oEnt)
 end
 
 ------------------ LOGS ------------------------
+
 local function FormatNumberMax(nNum,nMax)
   local nNum = tonumber(nNum)
   local nMax = tonumber(nMax)
@@ -216,37 +219,30 @@ local function FormatNumberMax(nNum,nMax)
   return stringFormat("%"..stringLen(tostring(mathFloor(nMax))).."d",nNum)
 end
 
-function SetLogControl(nLines,sFile)
-  SetOpVar("LOG_CURLOGS",0)
-  SetOpVar("LOG_LOGFILE",tostring(sFile or ""))
-  SetOpVar("LOG_MAXLOGS",mathFloor(tonumber(nLines) or 0))
-  if(not fileExists(GetOpVar("DIRPATH_BAS"),"DATA") and
-     not IsEmptyString(GetOpVar("LOG_LOGFILE"))) then
-    fileCreateDir(GetOpVar("DIRPATH_BAS"))
-  end
-end
-
 local function Log(anyStuff)
   local nMaxLogs = GetOpVar("LOG_MAXLOGS")
   if(nMaxLogs <= 0) then return end
-  local sLogFile = GetOpVar("LOG_LOGFILE")
+  local logLast  = GetOpVar("LOG_LOGLAST")
+  local logData  = tostring(anyStuff)
   local nCurLogs = GetOpVar("LOG_CURLOGS")
+  if(logLast == logData) then
+    SetOpVar("LOG_CURLOGS",nCurLogs + 1); return end
+  SetOpVar("LOG_LOGLAST",logData)
+  local sLogFile = GetOpVar("LOG_LOGFILE")
   if(sLogFile ~= "") then
     local fName = GetOpVar("DIRPATH_BAS")..GetOpVar("DIRPATH_LOG")..sLogFile..".txt"
-    fileAppend(fName,FormatNumberMax(nCurLogs,nMaxLogs).." >> "..tostring(anyStuff).."\n")
+    fileAppend(fName,FormatNumberMax(nCurLogs,nMaxLogs).." >> "..logData.."\n")
     nCurLogs = nCurLogs + 1
     if(nCurLogs > nMaxLogs) then
       fileDelete(fName)
       nCurLogs = 0
-    end
-    SetOpVar("LOG_CURLOGS",nCurLogs)
+    end; SetOpVar("LOG_CURLOGS",nCurLogs)
   else
-    print(FormatNumberMax(nCurLogs,nMaxLogs).." >> "..tostring(anyStuff))
+    print(FormatNumberMax(nCurLogs,nMaxLogs).." >> "..logData)
     nCurLogs = nCurLogs + 1
     if(nCurLogs > nMaxLogs) then
       nCurLogs = 0
-    end
-    SetOpVar("LOG_CURLOGS",nCurLogs)
+    end; SetOpVar("LOG_CURLOGS",nCurLogs)
   end
 end
 
@@ -262,7 +258,8 @@ function PrintInstance(anyStuff)
 end
 
 function LogInstance(anyStuff)
-  if(GetOpVar("LOG_MAXLOGS") <= 0) then return end
+  local logMax = (tonumber(GetOpVar("LOG_MAXLOGS")) or 0)
+  if(logMax and (logMax <= 0)) then return end
   local anyStuff = tostring(anyStuff)
   local logStats = GetOpVar("LOG_SKIP")
   if(logStats and logStats[1]) then
@@ -345,6 +342,17 @@ function Print(tT,sS)
   end
 end
 
+function SetLogControl(nLines,sFile)
+  SetOpVar("LOG_CURLOGS",0)
+  SetOpVar("LOG_LOGFILE",tostring(sFile or ""))
+  SetOpVar("LOG_MAXLOGS",mathFloor(tonumber(nLines) or 0))
+  if(not fileExists(GetOpVar("DIRPATH_BAS"),"DATA") and
+     not IsEmptyString(GetOpVar("LOG_LOGFILE"))) then
+    fileCreateDir(GetOpVar("DIRPATH_BAS"))
+  end
+  PrintInstance("SetLogControl("..tostring(GetOpVar("LOG_MAXLOGS"))..","..GetOpVar("LOG_LOGFILE")..")")
+end
+
 ----------------- INITAIALIZATION -----------------
 
 function GetIndexes(sType)
@@ -366,22 +374,23 @@ function SetIndexes(sType,I1,I2,I3,I4)
   return StatusLog(true,"SetIndexes["..sType.."]: Success")
 end
 
-function Init(sName,sPurpose)
+function InitBase(sName,sPurpose)
   SetOpVar("TYPEMT_STRING",getmetatable("TYPEMT_STRING"))
   SetOpVar("TYPEMT_SCREEN",{})
   SetOpVar("TYPEMT_CONTAINER",{})
   if(not IsString(sName)) then
-    return StatusPrint(false,"InitAssembly: Name <"..tostring(sName).."> not string") end
+    return StatusPrint(false,"InitBase: Name <"..tostring(sName).."> not string") end
   if(not IsString(sPurpose)) then
-    return StatusPrint(false,"InitAssembly: Purpose <"..tostring(sPurpose).."> not string") end
+    return StatusPrint(false,"InitBase: Purpose <"..tostring(sPurpose).."> not string") end
   if(IsEmptyString(sName) or tonumber(stringSub(sName,1,1))) then
-    return StatusPrint(false,"InitAssembly: Name invalid <"..sName..">") end
+    return StatusPrint(false,"InitBase: Name invalid <"..sName..">") end
   if(IsEmptyString(sPurpose) or tonumber(stringSub(sPurpose,1,1))) then
-    return StatusPrint(false,"InitAssembly: Purpose invalid <"..sPurpose..">") end
+    return StatusPrint(false,"InitBase: Purpose invalid <"..sPurpose..">") end
   SetOpVar("TIME_INIT",Time())
   SetOpVar("LOG_MAXLOGS",0)
   SetOpVar("LOG_CURLOGS",0)
   SetOpVar("LOG_LOGFILE","")
+  SetOpVar("LOG_LOGLAST","")
   SetOpVar("MAX_ROTATION",360)
   SetOpVar("ANG_ZERO",Angle())
   SetOpVar("VEC_ZERO",Vector())
@@ -409,15 +418,21 @@ function Init(sName,sPurpose)
   SetOpVar("TABLE_BORDERS",{})
   SetOpVar("TABLE_LOCALIFY",{})
   SetOpVar("TABLE_CATEGORIES",{})
+  SetOpVar("TABLE_PLAYER_KEYS",{})
   SetOpVar("FILE_MODEL","%.mdl")
   SetOpVar("OOP_DEFAULTKEY","(!@<#_$|%^|&>*)DEFKEY(*>&|^%|$_#<@!)")
   SetOpVar("CVAR_LIMITNAME","asm"..GetOpVar("NAME_INIT").."s")
   SetOpVar("MODE_DATABASE",GetOpVar("MISS_NOAV"))
   SetOpVar("HASH_USER_PANEL",GetOpVar("TOOLNAME_PU").."USER_PANEL")
   SetOpVar("HASH_QUERY_STORE",GetOpVar("TOOLNAME_PU").."QHASH_QUERY")
-  SetOpVar("HASH_PLAYER_INFO","PLAYER_INFO")
   SetOpVar("HASH_PROPERTY_NAMES","PROPERTY_NAMES")
   SetOpVar("HASH_PROPERTY_TYPES","PROPERTY_TYPES")
+  SetOpVar("TRACE_DATA",{ -- Used for general trace result storage
+    start  = Vector(),    -- Start position of the trace
+    endpos = Vector(),    -- End position of the trace
+    mask   = MASK_SOLID,  -- Mask telling it what to hit
+    filter = function(oEnt) -- Only valid props which are not the main entity or world or TRACE_FILTER ( if set )
+      if(oEnt and oEnt:IsValid() and oEnt:GetClass() == "prop_physics" and oEnt ~= GetOpVar("TRACE_FILTER")) then return true end end })
   SetOpVar("NAV_PIECE",{})
   SetOpVar("NAV_PANEL",{})
   SetOpVar("NAV_ADDITION",{})
@@ -445,7 +460,7 @@ function Init(sName,sPurpose)
     TPos = Vector(), -- O
     TAng = Angle ()  -- A
   })
-  return StatusPrint(true,"InitAssembly: Success")
+  return StatusPrint(true,"InitBase: Success")
 end
 
 ------------- ANGLE ---------------
@@ -821,32 +836,38 @@ function MakeScreen(sW,sH,eW,eH,conColors)
 end
 
 function SetAction(sKey,fAct,tDat)
-  if(not (sKey and IsString(sKey))) then return false end
-  if(not (fAct and type(fAct) == "function")) then return false end
-  if(not libAction[sKey]) then
-    libAction[sKey] = {}
-  end
+  if(not (sKey and IsString(sKey))) then
+    return StatusLog(nil,"SetAction: Key {"..type(sKey).."}<"..tostring(sKey).."> not string") end
+  if(not (fAct and type(fAct) == "function")) then
+    return StatusLog(nil,"SetAction: Act {"..type(fAct).."}<"..tostring(fAct).."> not function") end
+  if(not libAction[sKey]) then libAction[sKey] = {} end
   libAction[sKey].Act = fAct
   libAction[sKey].Dat = tDat
   return true
 end
 
 function GetActionCode(sKey)
-  if(not (sKey and IsString(sKey))) then return StatusLog(nil,"GetActionCode: ") end
-  if(not (libAction and libAction[sKey])) then return nil end
+  if(not (sKey and IsString(sKey))) then
+    return StatusLog(nil,"GetActionCode: Key {"..type(sKey).."}<"..tostring(sKey).."> not string") end
+  if(not (libAction and libAction[sKey])) then
+    return StatusLog(nil,"GetActionCode: Key not located") end
   return libAction[sKey].Act
 end
 
 function GetActionData(sKey)
-  if(not (sKey and IsString(sKey))) then return nil end
-  if(not (libAction and libAction[sKey])) then return nil end
+  if(not (sKey and IsString(sKey))) then
+    return StatusLog(nil,"GetActionData: Key {"..type(sKey).."}<"..tostring(sKey).."> not string") end
+  if(not (libAction and libAction[sKey])) then
+    return StatusLog(nil,"GetActionData: Key not located") end
   return libAction[sKey].Dat
 end
 
-function CallAction(sKey,A1,A2,A3,A4)
-  if(not (sKey and IsString(sKey))) then return false end
-  if(not (libAction and libAction[sKey])) then return false end
-  return libAction[sKey].Act(A1,A2,A3,A4,libAction[sKey].Dat)
+function CallAction(sKey,...)
+  if(not (sKey and IsString(sKey))) then
+    return StatusLog(nil,"CallAction: Key {"..type(sKey).."}<"..tostring(sKey).."> not string") end
+  if(not (libAction and libAction[sKey])) then
+    return StatusLog(nil,"CallAction: Key not located") end
+  return libAction[sKey].Act(libAction[sKey].Dat,...)
 end
 
 local function AddLineListView(pnListView,frUsed,ivNdex)
@@ -1038,17 +1059,15 @@ local function BorderValue(nsVal,sName)
   return nsVal
 end
 
-function IncDecPointID(ivPointID,sDir,rPiece)
+function IncDecPointID(ivPointID,nDir,rPiece)
   local iPointID = tonumber(ivPointID)
   if(not IsExistent(iPointID)) then
     return StatusLog(1,"IncDecPointID: Point ID NAN {"..type(ivPointID).."}<"..tostring(ivPointID)..">") end
   local stPOA = LocatePOA(rPiece,iPointID)
   if(not IsExistent(stPOA)) then
     return StatusLog(1,"IncDecPointID: Point ID #"..tostring(iPointID).." not located") end
-  local sDir, nDir = stringSub(tostring(sDir),1,1), 0
-  if    (sDir == "+") then nDir =  1
-  elseif(sDir == "-") then nDir = -1
-  else return StatusLog(iPointID,"IncDecPointID: Direction <"..sDir.."> mismatch") end
+  local Dir = (tonumber(nDir) or 0); Dir = ((Dir > 0) and 1) or ((Dir < 0) and -1) or 0
+  if(Dir == 0) then return StatusLog(iPointID,"IncDecPointID: Direction mismatch") end
   iPointID = RollValue(iPointID + nDir,1,rPiece.Kept)
   stPOA    = LocatePOA(rPiece,iPointID) -- Skip disabled O ( Origin )
   while(stPOA and stPOA.O[csD]) do
@@ -1057,11 +1076,11 @@ function IncDecPointID(ivPointID,sDir,rPiece)
     stPOA    = LocatePOA(rPiece,iPointID) -- Skip disabled O ( Origin )
   end; iPointID = RollValue(iPointID,1,rPiece.Kept)
   if(not IsExistent(LocatePOA(rPiece,iPointID))) then
-    return StatusLog(1,"IncDecPointID["..sDir.."]: Offset PnextID #"..tostring(iPointID).." not located") end
+    return StatusLog(1,"IncDecPointID["..tostring(Dir).."]: Offset PnextID #"..tostring(iPointID).." not located") end
   return iPointID
 end
 
-function IncDecPnextID(ivPnextID,ivPointID,sDir,rPiece)
+function IncDecPnextID(ivPnextID,ivPointID,nDir,rPiece)
   local iPointID, iPnextID = tonumber(ivPointID), tonumber(ivPnextID)
   if(not IsExistent(iPointID)) then
     return StatusLog(1,"IncDecPnextID: PointID NAN {"..type(ivPointID).."}<"..tostring(ivPointID)..">") end
@@ -1071,14 +1090,12 @@ function IncDecPnextID(ivPnextID,ivPointID,sDir,rPiece)
     return StatusLog(1,"IncDecPointID: Offset PointID #"..tostring(iPointID).." not located") end
   if(not IsExistent(LocatePOA(rPiece,iPnextID))) then
     return StatusLog(1,"IncDecPointID: Offset PnextID #"..tostring(iPnextID).." not located") end
-  local sDir, nDir = stringSub(tostring(sDir),1,1), 0
-  if    (sDir == "+") then nDir =  1
-  elseif(sDir == "-") then nDir = -1
-  else return StatusLog(iPnextID,"IncDecPnextID: Direction <"..sDir.."> mismatch") end
-  iPnextID = RollValue(iPnextID + nDir,1,rPiece.Kept)
-  if(iPnextID == iPointID) then iPnextID = RollValue(iPnextID + nDir,1,rPiece.Kept) end
+  local Dir = (tonumber(nDir) or 0); Dir = ((Dir > 0) and 1) or ((Dir < 0) and -1) or 0
+  if(Dir == 0) then return StatusLog(iPnextID,"IncDecPnextID: Direction mismatch") end
+  iPnextID = RollValue(iPnextID + Dir,1,rPiece.Kept)
+  if(iPnextID == iPointID) then iPnextID = RollValue(iPnextID + Dir,1,rPiece.Kept) end
   if(not IsExistent(LocatePOA(rPiece,iPnextID))) then
-    return StatusLog(1,"IncDecPointID["..sDir.."]: Offset PnextID #"..tostring(iPnextID).." not located") end
+    return StatusLog(1,"IncDecPointID["..tostring(Dir).."]: Offset PnextID #"..tostring(iPnextID).." not located") end
   return iPnextID
 end
 
@@ -1491,64 +1508,57 @@ function UndoFinishPly(pPly,anyMessage)
   return true
 end
 
-function LoadKeyPly(pPly, sKey)
-  local keyPly   = GetOpVar("HASH_PLAYER_INFO")
-  local plyCache = libCache[keyPly]
-  if(not IsExistent(plyCache)) then
-    libCache[keyPly] = {}; plyCache = libCache[keyPly] end
+function ReadKeyPly(pPly)
+  local plyKeys  = GetOpVar("TABLE_PLAYER_KEYS")
   if(not IsPlayer(pPly)) then
-    return StatusLog(false,"LoadKeyPly: Player <"..type(pPly)"> not available") end
+    return StatusLog(false,"ReadKeyPly: Player <"..type(pPly)"> not available") end
   local plyNick  = pPly:Nick()
-  local plyPlace = plyCache[plyNick]
+  local plyPlace = plyKeys[plyNick]
+  if(not IsExistent(plyPlace)) then plyKeys[plyNick] = {}; plyPlace = plyKeys[plyNick] end
+  local ucmdPressed = pPly:GetCurrentCommand()
+  if(not IsExistent(ucmdPressed)) then
+    return StatusLog(false,"ReadKeyPly: Command not obtained correctly") end
+  plyPlace["M_DX"]   = ucmdPressed:GetMouseX()
+  plyPlace["M_DY"]   = ucmdPressed:GetMouseY()
+  plyPlace["K_BTN"]  = ucmdPressed:GetButtons()
+  plyPlace["M_DSCR"] = ucmdPressed:GetMouseWheel()
+  return StatusLog(true,"ReadKeyPly: Player <"..plyNick.."> keys loaded")
+end
+
+function GetMouseWheelPly(pPly)
+  if(not IsPlayer(pPly)) then --- https://wiki.garrysmod.com/page/CUserCmd/GetMouseWheel
+    return StatusLog(false,"DeltaMousePly: Player <"..type(pPly)"> not available") end
+  local plyKeys  = GetOpVar("TABLE_PLAYER_KEYS")
+  local plyNick  = pPly:Nick()
+  local plyPlace = plyKeys[plyNick]
   if(not IsExistent(plyPlace)) then
-    plyCache[plyNick] = {
-      ["ALTLFT"]  = false,
-      ["ALTRGH"]  = false,
-      ["ATTLFT"]  = false,
-      ["ATTRGH"]  = false,
-      ["FORWARD"] = false,
-      ["BACK"]    = false,
-      ["MOVELFT"] = false,
-      ["MOVERGH"] = false,
-      ["RELOAD"]  = false,
-      ["USE"]     = false,
-      ["DUCK"]    = false,
-      ["JUMP"]    = false,
-      ["SPEED"]   = false,
-      ["SCORE"]   = false,
-      ["ZOOM"]    = false,
-      ["LEFT"]    = false,
-      ["RIGHT"]   = false,
-      ["WALK"]    = false
-    }
-    plyPlace = plyCache[plyNick]
-  end
-  if(IsExistent(sKey)) then
-    if(not IsString(sKey)) then
-      return StatusLog(false,"LoadKeyPly: Key hash {"..type(sKey).."}<"..tostring(sKey).."> not string") end
-    if(sKey == "DEBUG") then return plyPlace end
-    LogInstance("LoadKeyPly: NamePK <"..sKey.."> = "..tostring(plyPlace[sKey]))
-    return plyPlace[sKey]
-  end
-  plyPlace["ALTLFT"]  = pPly:KeyDown(IN_ALT1      )
-  plyPlace["ALTRGH"]  = pPly:KeyDown(IN_ALT2      )
-  plyPlace["ATTLFT"]  = pPly:KeyDown(IN_ATTACK    )
-  plyPlace["ATTRGH"]  = pPly:KeyDown(IN_ATTACK2   )
-  plyPlace["FORWARD"] = pPly:KeyDown(IN_FORWARD   )
-  plyPlace["BACK"]    = pPly:KeyDown(IN_BACK      )
-  plyPlace["MOVELFT"] = pPly:KeyDown(IN_MOVELEFT  )
-  plyPlace["MOVERGH"] = pPly:KeyDown(IN_MOVERIGHT )
-  plyPlace["RELOAD"]  = pPly:KeyDown(IN_RELOAD    )
-  plyPlace["USE"]     = pPly:KeyDown(IN_USE       )
-  plyPlace["DUCK"]    = pPly:KeyDown(IN_DUCK      )
-  plyPlace["JUMP"]    = pPly:KeyDown(IN_JUMP      )
-  plyPlace["SPEED"]   = pPly:KeyDown(IN_SPEED     )
-  plyPlace["SCORE"]   = pPly:KeyDown(IN_SCORE     )
-  plyPlace["ZOOM"]    = pPly:KeyDown(IN_ZOOM      )
-  plyPlace["LEFT"]    = pPly:KeyDown(IN_LEFT      )
-  plyPlace["RIGHT"]   = pPly:KeyDown(IN_RIGHT     )
-  plyPlace["WALK"]    = pPly:KeyDown(IN_WALK      )
-  return StatusLog(true,"LoadKeyPly: Player <"..plyNick.."> keys loaded")
+    return StatusLog(false,"DeltaMousePly: <"..plyNick.."> nomands not loaded") end
+  return plyPlace["M_DSCR"]
+end
+
+function GetMouseDeltaPly(pPly)
+  if(not IsPlayer(pPly)) then --- https://wiki.garrysmod.com/page/CUserCmd/GetMouse(XY)
+    return StatusLog(false,"GetMouseDeltaPly: Player <"..type(pPly)"> not available") end
+  local plyKeys  = GetOpVar("TABLE_PLAYER_KEYS")
+  local plyNick  = pPly:Nick()
+  local plyPlace = plyKeys[plyNick]
+  if(not IsExistent(plyPlace)) then
+    return StatusLog(false,"GetMouseDeltaPly: <"..plyNick.."> nomands not loaded") end
+  return plyPlace["M_DX"], plyPlace["M_DY"]
+end
+
+function CheckButtonPly(pPly, ivInKey)
+  if(not IsPlayer(pPly)) then --- https://wiki.garrysmod.com/page/Enums/IN
+    return StatusLog(false,"CheckButtonPly: Player <"..type(pPly)"> not available") end
+  local iInKey = tonumber(ivInKey)
+  if(not IsExistent(iInKey)) then
+    return StatusLog(false,"CheckButtonPly: Input key {"..type(ivInKey)"}<"..tostring(ivInKey).."> invalid") end
+  local plyKeys  = GetOpVar("TABLE_PLAYER_KEYS")
+  local plyNick  = pPly:Nick()
+  local plyPlace = plyKeys[plyNick]
+  if(not IsExistent(plyPlace)) then
+    return StatusLog(false,"CheckButtonPly: Player <"..plyNick.."> commands not loaded") end
+  return (bitBand(plyPlace["K_BTN"],iInKey) ~= 0)
 end
 
 -------------------------- BUILDSQL ------------------------------
@@ -2512,6 +2522,7 @@ function CacheQueryProperty(sType)
 end
 
 ---------------------- EXPORT --------------------------------
+
 local function GetFieldsName(defTable,sDelim)
   if(not IsExistent(sDelim)) then return "" end
   local sDelim  = stringSub(tostring(sDelim),1,1)
@@ -2533,13 +2544,11 @@ local function GetFieldsName(defTable,sDelim)
 end
 
 --[[
- * Save/Load the DB Using Excel or
- * anything that supports delimiter
- * separated digital tables
- * sPrefix = Something that separates exported table from the rest ( e.g. db_ )
- * sTable  = Definition KEY to export to
- * sDelim  = Delimiter CHAR data separator
- * bCommit = true to insert the read values
+ * Import table data from DSV database created earlier
+ * sTable  = Definition KEY to import
+ * sDelim  = Delimiter separating the values
+ * bCommit = Calls InsertRecord() when set to true
+ * sPrefix = Prefix used on importing ( if any )
 ]]--
 function ImportDSV(sTable,sDelim,bCommit,sPrefix)
   if(not IsString(sTable)) then
@@ -2556,7 +2565,7 @@ function ImportDSV(sTable,sDelim,bCommit,sPrefix)
   local sLine, sChar, lenLine = "", "X", 0
   while(sChar) do
     sChar = F:Read(1)
-    if(not sChar) then return end
+    if(not sChar) then break end -- Exit the loop and close the file
     if(sChar == "\n") then
       lenLine = stringLen(sLine)
       if(stringSub(sLine,lenLine,lenLine) == "\r") then
@@ -2577,6 +2586,13 @@ function ImportDSV(sTable,sDelim,bCommit,sPrefix)
   end; F:Close()
 end
 
+--[[
+ * Save/Load the DB Using Excel or
+ * anything that supports delimiter separated digital tables
+ * sTable  = Definition KEY to export
+ * sMethod = Export method to be used ( either INS or DSV )
+ * sPrefix = Prefix used on exporting ( if any )
+]]--
 function DeleteExternalDatabase(sTable,sMethod,sPrefix)
   if(not IsString(sTable)) then
     return StatusLog(false,"DeleteExternalDatabase: Table {"..type(sTable).."}<"..tostring(sTable).."> not string") end
@@ -2690,14 +2706,14 @@ function StoreExternalDatabase(sTable,sDelim,sMethod,sPrefix)
         iNdex = 1
         while(tRecord[iNdex]) do -- Data is already inserted, there will be no crash
           tData = tRecord[iNdex]
-          sTemp = sData..MatchType(defTable,tData[defTable[2 ][1]],2 ,true,"\"")..sDelim..
-                         MatchType(defTable,tData[defTable[3 ][1]],3 ,true,"\"")..sDelim..
-                         MatchType(defTable,tData[defTable[4 ][1]],4 ,true,"\"")..sDelim..
-                         MatchType(defTable,tData[defTable[5 ][1]],5 ,true,"\"")..sDelim..
-                         MatchType(defTable,tData[defTable[6 ][1]],6 ,true,"\"")..sDelim..
-                         MatchType(defTable,tData[defTable[7 ][1]],7 ,true,"\"")..sDelim..
-                         MatchType(defTable,tData[defTable[8 ][1]],8 ,true,"\"")..sDelim..
-                         MatchType(defTable,tData[defTable[9 ][1]],9 ,true,"\"")..sDelim..
+          sTemp = sData..MatchType(defTable,tData[defTable[ 2][1]], 2,true,"\"")..sDelim..
+                         MatchType(defTable,tData[defTable[ 3][1]], 3,true,"\"")..sDelim..
+                         MatchType(defTable,tData[defTable[ 4][1]], 4,true,"\"")..sDelim..
+                         MatchType(defTable,tData[defTable[ 5][1]], 5,true,"\"")..sDelim..
+                         MatchType(defTable,tData[defTable[ 6][1]], 6,true,"\"")..sDelim..
+                         MatchType(defTable,tData[defTable[ 7][1]], 7,true,"\"")..sDelim..
+                         MatchType(defTable,tData[defTable[ 8][1]], 8,true,"\"")..sDelim..
+                         MatchType(defTable,tData[defTable[ 9][1]], 9,true,"\"")..sDelim..
                          MatchType(defTable,tData[defTable[10][1]],10,true,"\"")..sDelim..
                          MatchType(defTable,tData[defTable[11][1]],11,true,"\"")..sDelim..
                          MatchType(defTable,tData[defTable[12][1]],12,true,"\"")
@@ -2870,7 +2886,7 @@ function GetEntitySpawn(trEnt,trHitPos,shdModel,ivhdPointID,
   if(not (IsExistent(hdRec.Type) and IsString(hdRec.Type))) then
     return StatusLog(nil,"GetEntitySpawn: Holder type invalid <"..tostring(hdRec.Type)..">") end
   -- If the types are different and disabled
-  if((not enIgnTyp or enIgnTyp == 0) and trRec.Type ~= hdRec.Type) then
+  if((not enIgnTyp) and (trRec.Type ~= hdRec.Type)) then
     return StatusLog(nil,"GetEntitySpawn: Types different <"..tostring(trRec.Type)..","..tostring(hdRec.Type)..">") end
   -- We have the next Piece Offset
   local vTemp = Vector()
@@ -2913,10 +2929,31 @@ function GetEntitySpawn(trEnt,trHitPos,shdModel,ivhdPointID,
   stSpawn.OPos:Add(stSpawn.TPos)
   stSpawn.OAng:Set(trEnt:LocalToWorldAngles(stSpawn.OAng))
   -- Do the flatten flag right now Its important !
-  if(enFlatten and enFlatten ~= 0) then
-    stSpawn.OAng[caP] = 0; stSpawn.OAng[caR] = 0
-  end
+  if(enFlatten) then stSpawn.OAng[caP] = 0; stSpawn.OAng[caR] = 0 end
   return GetNormalSpawn(nil,nil,shdModel,ihdPointID,ucsPosX,ucsPosY,ucsPosZ,ucsAngP,ucsAngY,ucsAngR)
+end
+
+--[[
+ * This function performs a trace relative to the entity point chosen
+ * trEnt     = Entity chosen for the trace
+ * ivPointID = Point ID selected for its model
+ * nLen      = Lenght of the trace
+]]--
+function GetTraceEntityPoint(trEnt, ivPointID, nLen)
+  if(not (trEnt and trEnt:IsValid())) then
+    return StatusLog(nil,"GetTraceEntityPoint: Trace entity invalid") end
+  local nLen = (tonumber(nLen) or 0); if(nLen <= 0) then
+    return StatusLog(nil,"GetTraceEntityPoint: Distance skipped") end
+  local trRec = CacheQueryPiece(trEnt:GetModel())
+  if(not trRec) then return StatusLog(nil,"GetTraceEntityPoint: Trace not piece") end
+  local trPOA = LocatePOA(trRec, ivPointID)
+  if(not IsExistent(trPOA)) then
+    return StatusLog(nil,"GetTraceEntityPoint: Point <"..tostring(ivPointID).."> invalid") end
+  local trDt, trAng = GetOpVar("TRACE_DATA"), Angle(); SetOpVar("TRACE_FILTER",trEnt)
+  SetVector(trDt.start, trPOA.O); trDt.start:Rotate(trEnt:GetAngles()); trDt.start:Add(trEnt:GetPos())
+  SetAngle (trAng     , trPOA.A); trAng:Set(trEnt:LocalToWorldAngles(trAng))
+  trDt.endpos:Set(trAng:Forward()); trDt.endpos:Mul(nLen); trDt.endpos:Add(trDt.start)
+  return utilTraceLine(trDt), trDt
 end
 
 function AttachAdditions(ePiece)
@@ -3092,7 +3129,7 @@ function AttachBodyGroups(ePiece,sBgrpIDs)
   return StatusLog(true,"AttachBodyGroups: Success")
 end
 
-local function SetPosBound(ePiece,vPos,oPly,sMode)
+function SetPosBound(ePiece,vPos,oPly,sMode)
   if(not (ePiece and ePiece:IsValid())) then
     return StatusLog(false,"SetPosBound: Entity invalid") end
   if(not IsExistent(vPos)) then
@@ -3134,7 +3171,7 @@ function MakePiece(pPly,sModel,vPos,aAng,nMass,sBgSkIDs,clColor,sMode)
   ePiece:SetNotSolid(false)
   ePiece:SetModel(sModel)
   if(not SetPosBound(ePiece,vPos or GetOpVar("VEC_ZERO"),pPly,sMode)) then
-    return StatusLog(nil,"MakePiece: "..pPly:Nick().." spawned <"..sModel.."> outside of map bounds") end
+    return StatusLog(nil,"MakePiece: "..pPly:Nick().." spawned <"..sModel.."> outside bounds") end
   ePiece:SetAngles(aAng or GetOpVar("ANG_ZERO"))
   ePiece:Spawn()
   ePiece:Activate()
@@ -3232,7 +3269,7 @@ function GetAsmVar(sShortName, sMode)
   if    (sMode == "INT") then return (tonumber(BorderValue(CVar:GetInt()  ,"cvar_"..sVar)) or 0)
   elseif(sMode == "FLT") then return (tonumber(BorderValue(CVar:GetFloat(),"cvar_"..sVar)) or 0)
   elseif(sMode == "STR") then return  tostring(CVar:GetString() or "")
-  elseif(sMode == "BUL") then return (CVar:GetBool() or false)
+  elseif(sMode == "BUL") then return  CVar:GetBool()
   elseif(sMode == "DEF") then return  CVar:GetDefault()
   elseif(sMode == "INF") then return  CVar:GetHelpText()
   elseif(sMode == "NAM") then return  CVar:GetName()
@@ -3246,7 +3283,7 @@ function SetLocalify(sCode, sPhrase, sDetail)
     return StatusLog(nil,"SetLocalify: Phrase words <"..tostring(sPhrase).."> invalid") end
   local Localify = GetOpVar("TABLE_LOCALIFY")
   if(not IsExistent(Localify[sCode])) then Localify[sCode] = {}; end
-  Localify[sCode][sPhrase] = sDetail
+  Localify[sCode][sPhrase] = tostring(sDetail)
 end
 
 function InitLocalify(sCode) -- https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
@@ -3255,6 +3292,7 @@ function InitLocalify(sCode) -- https://en.wikipedia.org/wiki/List_of_ISO_639-1_
   local Localify = GetOpVar("TABLE_LOCALIFY")
   if(not IsExistent(Localify[sCode])) then
     return StatusLog(nil,"GetLocalify: Language not found for <"..sCode..">") end
+  LogInstance("InitLocalify: Code <"..sCode..">")
   for phrase, detail in pairs(Localify[sCode]) do
     languageAdd(phrase, detail)
   end
